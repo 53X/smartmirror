@@ -1,0 +1,26 @@
+.env
+.env.local
+*.pem
+.DS_Store
+.cursor/
+.vercel/
+frontend/.vercel/
+
+# Python
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+*.egg-info/
+
+# Local media (SKU parts, reconstruct, try-on outputs)
+backend/data/
+
+# Frontend (create-next-app also has frontend/.gitignore)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+frontend/*.tsbuildinfo

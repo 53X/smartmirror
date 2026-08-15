@@ -1,0 +1,19 @@
+# Git
+.git
+.cursor
+**/.env
+**/.env.local
+
+# Python
+**/venv/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+
+# Frontend (not needed in backend images)
+frontend/node_modules/
+frontend/.next/
+
+# Local data
+data/
+backend/data/
