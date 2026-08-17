@@ -6,12 +6,17 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class TryOnRequest:
-    """Inputs for a hosted or stub try-on call. Do not log these image bytes."""
+    """Inputs for a hosted or stub try-on call. Do not log these image bytes.
+
+    ``face_box`` is (x, y, w, h) in the preprocessed customer still, used for
+    the OpenAI identity-lock mask. Other vendors ignore it.
+    """
 
     customer_still: bytes
     reconstructed_sari: bytes
     sku_id: str
     session_id: str
+    face_box: tuple[int, int, int, int] | None = None
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,9 @@ import { ChangeEvent, ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ImageUp, UserRound } from "lucide-react";
 import { WebcamCapture } from "@/components/WebcamCapture";
+import { CaptureGuidance } from "@/components/CaptureGuidance";
 import { fileToStillDataUrl } from "@/lib/captureFrame";
+import { CAMERA_INSTRUCTION, CAPTURE_HEADLINE } from "@/lib/captureGuidance";
 import { readKioskSession, writeKioskSession } from "@/lib/kioskSession";
 
 type Source = "camera" | "upload" | "demo";
@@ -69,11 +71,9 @@ export default function KioskCapturePage() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-6 px-6 py-10">
       <div>
         <h1 className="font-display text-4xl">Choose the person</h1>
-        <p className="mt-2 text-zinc-400">
-          Front-facing, full body if you can. For a pitch you can upload a photo or use the demo
-          model — you do not have to stand in front of the camera.
-        </p>
+        <p className="mt-2 text-zinc-400">{CAPTURE_HEADLINE}</p>
       </div>
+      <CaptureGuidance />
       <div className="grid grid-cols-3 gap-2">
         <SourceButton active={source === "upload"} onClick={() => setSource("upload")} icon={<ImageUp size={16} />} label="Upload" />
         <SourceButton active={source === "demo"} onClick={() => setSource("demo")} icon={<UserRound size={16} />} label="Demo model" />
@@ -84,7 +84,7 @@ export default function KioskCapturePage() {
         <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-white/20 bg-zinc-900 px-6 py-16 text-center">
           <ImageUp className="text-amber-200" />
           <span className="text-sm text-zinc-300">
-            {busy ? "Reading photo…" : "Upload a front-facing photo of a woman"}
+            {busy ? "Reading photo…" : "Upload a front-facing photo. Face clear, one person, nothing covering the face."}
           </span>
           <input type="file" accept="image/*" className="hidden" onChange={(event) => void handleUpload(event)} />
         </label>
@@ -108,7 +108,7 @@ export default function KioskCapturePage() {
       ) : null}
       {source === "camera" ? (
         <WebcamCapture
-          instruction="Keep the face in the oval. Side poses are rejected in v1."
+          instruction={CAMERA_INSTRUCTION}
           buttonLabel="Capture still"
           onCapture={commitStill}
         />

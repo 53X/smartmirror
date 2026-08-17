@@ -61,7 +61,11 @@ export function WebcamCapture({
       <p className="text-sm text-zinc-300">{instruction}</p>
       <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black aspect-[3/4]">
         <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-        <div className="pointer-events-none absolute inset-x-8 top-10 bottom-16 rounded-[40%] border border-amber-200/40" />
+        <div className="pointer-events-none absolute inset-x-[18%] top-[8%] h-[28%] rounded-[46%] border-2 border-amber-200/70" />
+        <div className="pointer-events-none absolute inset-x-[12%] top-[34%] bottom-[10%] rounded-[28px] border border-amber-200/35" />
+        <p className="pointer-events-none absolute bottom-3 left-0 right-0 text-center text-[11px] text-amber-100/80">
+          Head in the oval · shoulders in the box · nothing on the face
+        </p>
       </div>
       <button
         type="button"

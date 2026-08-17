@@ -96,7 +96,20 @@ export default function KioskBrowsePage() {
           End session
         </button>
       </div>
-      {error ? <p className="text-sm text-red-300">{error}</p> : null}
+      {error ? (
+        <div className="space-y-2">
+          <p className="text-sm text-red-300">{error}</p>
+          {/recapture|face|person/i.test(error) ? (
+            <button
+              type="button"
+              className="text-sm text-amber-200 underline"
+              onClick={() => router.push("/kiosk/capture")}
+            >
+              Recapture photo
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {skus.length === 0 && !error ? (
         <p className="text-zinc-400">No approved saris yet. Staff must capture, reconstruct, and approve.</p>
       ) : null}

@@ -16,6 +16,7 @@ from app.reconstruct import reconstruct_from_part_bytes
 from app.settings import settings
 from app.tryon.factory import get_tryon_vendor
 from app.tryon.interface import TryOnRequest
+from app.tryon.person_preprocess import preprocess_person_still
 
 logger = configure_service_logging("ai_service", settings.log_level)
 
@@ -119,16 +120,45 @@ def run_tryon_job(
     reconstructed_asset_url: str,
     customer_still: bytes,
 ) -> None:
-    """Run Stage B using stub or hosted vendor. Customer still is not logged."""
+    """Run Stage B: preprocess the customer still, then stub or hosted vendor. Still bytes are not logged."""
     try:
         sari_bytes = _fetch_bytes(reconstructed_asset_url)
+        try:
+            prepared_still, meta = preprocess_person_still(customer_still)
+        except ValueError as exc:
+            logger.warning(
+                "preprocess_rejected %s",
+                safe_event(
+                    {
+                        "job_id": str(job_id),
+                        "session_id": session_id,
+                        "reason": str(exc),
+                    }
+                ),
+            )
+            raise
+        logger.info(
+            "preprocess_succeeded %s",
+            safe_event(
+                {
+                    "job_id": str(job_id),
+                    "session_id": session_id,
+                    "width": meta.width,
+                    "height": meta.height,
+                    "face_box": meta.face_box,
+                    "crop_box": meta.crop_box,
+                    "flags": list(meta.flags),
+                }
+            ),
+        )
         vendor = get_tryon_vendor()
         result = vendor.generate(
             TryOnRequest(
-                customer_still=customer_still,
+                customer_still=prepared_still,
                 reconstructed_sari=sari_bytes,
                 sku_id=str(sku_id),
                 session_id=session_id,
+                face_box=meta.face_box,
             )
         )
         jobs.complete(job_id, result.image_png)
