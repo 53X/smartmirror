@@ -58,6 +58,11 @@ _CANONICAL_WIDTH_OVER_HEIGHT = 2 / 3
 _MAX_OUTPUT = (1280, 1920)
 _LOW_CONTRAST_SPAN = 12
 _SECOND_FACE_AREA_RATIO = 0.45
+_NMS_IOU = 0.3
+_NMS_INTERSECTION_OVER_SMALLER = 0.5
+_NMS_CENTER_DISTANCE_FRACTION = 0.55
+_TORSO_ALIGN_FRACTION = 1.15
+_TORSO_CHIN_SLACK_FRACTION = 0.2
 _OCCLUSION_DARK_DELTA = 40
 _OCCLUSION_COVER_VARIANCE = 18
 
@@ -347,11 +352,17 @@ def _reject_extra_faces(
     image: Image.Image,
     primary: FaceBox,
 ) -> None:
-    """Reject a still when a second face is large enough to compete with the subject."""
-    boxes = _detected_faces(detector, image)
+    """Reject a still when a second distinct large face is present.
+
+    Haar often returns duplicate boxes on one face plus jewelry/watermark
+    blobs on the torso. Those must not count as a second person.
+    """
+    boxes = _unique_face_boxes(_detected_faces(detector, image))
     primary_area = max(1, primary[2] * primary[3])
     for box in boxes:
-        if box == primary:
+        if _boxes_are_same_face(box, primary):
+            continue
+        if _is_torso_false_positive(primary, box):
             continue
         if box[2] * box[3] >= _SECOND_FACE_AREA_RATIO * primary_area:
             raise ValueError(
@@ -401,23 +412,63 @@ def _detected_faces(detector: FaceDetector, image: Image.Image) -> list[FaceBox]
 
 
 def _unique_face_boxes(boxes: list[FaceBox]) -> list[FaceBox]:
-    """Drop near-duplicate Haar hits from frontal + profile cascades."""
+    """NMS: keep largest boxes; drop overlapping, nested, or tightly-centered duplicates."""
     unique: list[FaceBox] = []
-    for box in boxes:
-        if any(_boxes_overlap(box, kept) > 0.6 for kept in unique):
+    ordered = sorted(boxes, key=lambda box: box[2] * box[3], reverse=True)
+    for box in ordered:
+        if any(_boxes_are_same_face(box, kept) for kept in unique):
             continue
         unique.append(box)
     return unique
 
 
-def _boxes_overlap(left: FaceBox, right: FaceBox) -> float:
-    """Return intersection-over-union for two (x, y, w, h) boxes."""
+def _boxes_are_same_face(left: FaceBox, right: FaceBox) -> bool:
+    """True when two Haar/YuNet boxes describe the same face, not two people."""
+    if left == right:
+        return True
+    if _boxes_overlap(left, right) >= _NMS_IOU:
+        return True
+    if _intersection_over_smaller(left, right) >= _NMS_INTERSECTION_OVER_SMALLER:
+        return True
+    left_cx = left[0] + left[2] / 2
+    left_cy = left[1] + left[3] / 2
+    right_cx = right[0] + right[2] / 2
+    right_cy = right[1] + right[3] / 2
+    distance = ((left_cx - right_cx) ** 2 + (left_cy - right_cy) ** 2) ** 0.5
+    scale = max(max(left[2], left[3]), max(right[2], right[3]))
+    return distance < _NMS_CENTER_DISTANCE_FRACTION * scale
+
+
+def _is_torso_false_positive(primary: FaceBox, box: FaceBox) -> bool:
+    """True for jewelry, sari-fold, and watermark blobs under the chin, in-line with the face."""
+    primary_cx = primary[0] + primary[2] / 2
+    box_cx = box[0] + box[2] / 2
+    chin_y = primary[1] + primary[3]
+    aligned = abs(box_cx - primary_cx) <= max(primary[2], box[2]) * _TORSO_ALIGN_FRACTION
+    below_chin = box[1] >= chin_y - int(_TORSO_CHIN_SLACK_FRACTION * primary[3])
+    return aligned and below_chin
+
+
+def _intersection_area(left: FaceBox, right: FaceBox) -> int:
+    """Return overlapping pixel area of two (x, y, w, h) boxes."""
     ax, ay, aw, ah = left
     bx, by, bw, bh = right
     inter_w = max(0, min(ax + aw, bx + bw) - max(ax, bx))
     inter_h = max(0, min(ay + ah, by + bh) - max(ay, by))
-    inter = inter_w * inter_h
-    union = aw * ah + bw * bh - inter
+    return inter_w * inter_h
+
+
+def _intersection_over_smaller(left: FaceBox, right: FaceBox) -> float:
+    """Return intersection over the smaller box area (catches nested Haar hits)."""
+    inter = _intersection_area(left, right)
+    smaller = min(left[2] * left[3], right[2] * right[3])
+    return 0.0 if smaller <= 0 else inter / smaller
+
+
+def _boxes_overlap(left: FaceBox, right: FaceBox) -> float:
+    """Return intersection-over-union for two (x, y, w, h) boxes."""
+    inter = _intersection_area(left, right)
+    union = left[2] * left[3] + right[2] * right[3] - inter
     return 0.0 if union <= 0 else inter / union
 
 

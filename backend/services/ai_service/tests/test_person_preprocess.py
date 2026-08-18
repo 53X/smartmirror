@@ -1,14 +1,31 @@
 """Tests for person-still preprocess (injected detector, no network)."""
 
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from PIL import Image, ImageDraw
 
 from app.tryon.person_preprocess import (
+    OpenCvHaarFaceDetector,
     UnavailableFaceDetector,
     default_face_detector,
     preprocess_person_still,
+)
+
+_SARI_STILL_CANDIDATES = (
+    Path(
+        "/mnt/c/Users/PRANAY/.cursor/projects/c-Users-PRANAY-smartmirror/assets/"
+        "c__Users_PRANAY_AppData_Roaming_Cursor_User_workspaceStorage_"
+        "4a60dfa3a251ab47ce6bee9e44631e9d_images_traditional-indian-woman-in-saree-"
+        "with-white-background-full-body-DDAKDP-70064fee-1cb0-4123-a29a-86277ddfe2ce.png"
+    ),
+    Path(
+        r"C:\Users\PRANAY\.cursor\projects\c-Users-PRANAY-smartmirror\assets"
+        r"\c__Users_PRANAY_AppData_Roaming_Cursor_User_workspaceStorage_"
+        r"4a60dfa3a251ab47ce6bee9e44631e9d_images_traditional-indian-woman-in-saree-"
+        r"with-white-background-full-body-DDAKDP-70064fee-1cb0-4123-a29a-86277ddfe2ce.png"
+    ),
 )
 
 
@@ -140,6 +157,69 @@ def test_preprocess_rejects_second_large_face() -> None:
             still,
             detector=FakeFaceDetector(primary, extra_boxes=[other]),
         )
+
+
+def test_preprocess_merges_overlapping_duplicate_face_boxes() -> None:
+    """Haar often returns two shifted boxes on one face; that is not a second person."""
+    primary = (70, 36, 50, 62)
+    duplicate = (78, 42, 46, 58)
+    still = _still_with_face(240, 360, primary)
+    png, meta = preprocess_person_still(
+        still,
+        detector=FakeFaceDetector(primary, extra_boxes=[duplicate]),
+    )
+    assert meta.face_box is not None
+    with Image.open(BytesIO(png)) as out:
+        assert out.height > out.width
+
+
+def test_preprocess_ignores_torso_jewelry_false_face() -> None:
+    """Necklace / watermark blobs sit below the chin and must not trip multi-person."""
+    primary = (90, 30, 50, 50)
+    torso = (95, 92, 40, 40)
+    still = _still_with_face(240, 360, primary)
+    png, meta = preprocess_person_still(
+        still,
+        detector=FakeFaceDetector(primary, extra_boxes=[torso]),
+    )
+    assert meta.face_box is not None
+    with Image.open(BytesIO(png)) as out:
+        assert out.height > out.width
+
+
+def test_haar_full_body_sari_still_is_single_person() -> None:
+    """Studio full-length one-subject still must pass the default Haar detector."""
+    still_path = next((path for path in _SARI_STILL_CANDIDATES if path.is_file()), None)
+    if still_path is None:
+        pytest.skip("founder sari still is not on disk")
+    haar = OpenCvHaarFaceDetector()
+    image = Image.open(still_path).convert("RGB")
+    merged = haar.detect_faces(image)
+    assert len(merged) == 1
+    png, meta = preprocess_person_still(still_path.read_bytes())
+    assert meta.face_box is not None
+    with Image.open(BytesIO(png)) as out:
+        assert out.height > out.width
+
+
+def test_preprocess_ignores_clahe_retry_torso_boxes() -> None:
+    """Boxes Haar returns on jewelry/watermark during CLAHE retry must not reject."""
+    primary = (267, 126, 91, 91)
+    extras = [
+        (310, 276, 68, 68),
+        (313, 328, 65, 65),
+        (365, 327, 49, 49),
+        (377, 303, 32, 32),
+        (266, 126, 94, 94),
+    ]
+    still = _still_with_face(638, 1024, primary)
+    png, meta = preprocess_person_still(
+        still,
+        detector=FakeFaceDetector(primary, extra_boxes=extras),
+    )
+    assert meta.face_box is not None
+    with Image.open(BytesIO(png)) as out:
+        assert out.height > out.width
 
 
 def test_preprocess_allows_small_second_face() -> None:
