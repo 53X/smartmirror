@@ -3,9 +3,11 @@
 Pipeline (CPU, milliseconds–low hundreds of ms; Pillow plus optional OpenCV):
 
 1. Decode and apply EXIF orientation.
-2. Detect a face via an injectable ``FaceDetector``. Default is OpenCV Haar
-   when ``opencv-python-headless`` is installed. If OpenCV is missing, detection
-   returns None (fails closed in production).
+2. Detect a face via an injectable ``FaceDetector``. Default prefers OpenCV
+   YuNet when the ONNX weights are present, else Haar. Pin
+   ``opencv-python-headless`` to 4.x: OpenCV 5 removed ``CascadeClassifier``
+   and Haar XMLs, which made every still fail closed as "no face". If OpenCV
+   is missing or Haar/YuNet cannot load, detection returns None (fails closed).
 3. Crop to a canonical 2:3 portrait from the face, without stretching. If the
    crop would clip the face, expand the canvas with edge fill — never cut the face.
 4. Mild luminance autolevel. No beauty filter and no identity reshape.
@@ -26,6 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from io import BytesIO
+from pathlib import Path
 from typing import Protocol
 
 from PIL import Image, ImageOps
@@ -34,7 +37,20 @@ from app.settings import settings
 
 FaceBox = tuple[int, int, int, int]
 
-_MIN_FACE_FRACTION = 0.08
+# Full-length sari / studio stills: face is often ~5–8% of min(width, height).
+_MIN_FACE_FRACTION = 0.04
+_YUNET_MODEL_PATH = (
+    Path(__file__).resolve().parent / "assets" / "face_detection_yunet_2023mar.onnx"
+)
+_HAAR_CASCADE_FILES = (
+    "haarcascade_frontalface_default.xml",
+    "haarcascade_profileface.xml",
+)
+_HAAR_RETRY_CASCADE_FILES = (
+    "haarcascade_frontalface_default.xml",
+    "haarcascade_frontalface_alt2.xml",
+    "haarcascade_profileface.xml",
+)
 _EDGE_MARGIN_FRACTION = 0.02
 _FACE_HEIGHT_IN_PORTRAIT = 0.14
 _HEAD_CENTER_Y_FRACTION = 0.18
@@ -64,6 +80,36 @@ class PreprocessMetadata:
     flags: tuple[str, ...] = field(default_factory=tuple)
 
 
+class OpenCvYunetFaceDetector:
+    """YuNet (FaceDetectorYN). Used when the ONNX file is present on disk."""
+
+    def detect_face(self, image: Image.Image) -> FaceBox | None:
+        """Return the highest-scoring face, or None."""
+        faces = self.detect_faces(image)
+        return None if not faces else faces[0]
+
+    def detect_faces(self, image: Image.Image) -> list[FaceBox]:
+        """Return YuNet boxes, largest first."""
+        boxes = self._collect_yunet_boxes(image)
+        unique = _unique_face_boxes(boxes)
+        return sorted(unique, key=lambda box: box[2] * box[3], reverse=True)
+
+    def _collect_yunet_boxes(self, image: Image.Image) -> list[FaceBox]:
+        """Run YuNet on the full frame, then the upper body if nothing matches."""
+        import cv2
+        import numpy as np
+
+        if not hasattr(cv2, "FaceDetectorYN_create") or not _YUNET_MODEL_PATH.is_file():
+            return []
+        rgb = np.asarray(image.convert("RGB"))
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        boxes = _yunet_detect(bgr)
+        if boxes:
+            return boxes
+        upper_h = max(1, int(bgr.shape[0] * 0.55))
+        return _yunet_detect(bgr[:upper_h, :, :])
+
+
 class OpenCvHaarFaceDetector:
     """Haar cascade detector. Optional at import time; constructed only if cv2 loads."""
 
@@ -79,7 +125,7 @@ class OpenCvHaarFaceDetector:
         return sorted(unique, key=lambda box: box[2] * box[3], reverse=True)
 
     def _collect_haar_boxes(self, image: Image.Image) -> list[FaceBox]:
-        """Run frontal and profile cascades."""
+        """Run Haar; retry CLAHE and an upper-body crop for small/full-length faces."""
         import cv2
         import numpy as np
 
@@ -87,22 +133,35 @@ class OpenCvHaarFaceDetector:
             return []
         rgb = np.asarray(image.convert("RGB"))
         gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        found_boxes: list[FaceBox] = []
-        for name in (
-            "haarcascade_frontalface_default.xml",
-            "haarcascade_profileface.xml",
-        ):
-            cascade = cv2.CascadeClassifier(cv2.data.haarcascades + name)
-            if cascade.empty():
-                continue
-            found = cascade.detectMultiScale(
-                gray,
-                scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(24, 24),
-            )
-            found_boxes.extend((int(x), int(y), int(w), int(h)) for x, y, w, h in found)
-        return found_boxes
+        min_side = min(gray.shape[0], gray.shape[1])
+        first = _haar_detect_on_gray(
+            gray,
+            cascade_names=_HAAR_CASCADE_FILES,
+            scale_factor=1.1,
+            min_neighbors=5,
+            min_size=max(24, int(0.04 * min_side)),
+        )
+        if first:
+            return first
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+        retry_min = max(20, int(0.025 * min_side))
+        second = _haar_detect_on_gray(
+            clahe,
+            cascade_names=_HAAR_RETRY_CASCADE_FILES,
+            scale_factor=1.05,
+            min_neighbors=3,
+            min_size=retry_min,
+        )
+        if second:
+            return second
+        upper_h = max(1, int(gray.shape[0] * 0.55))
+        return _haar_detect_on_gray(
+            gray[:upper_h, :],
+            cascade_names=_HAAR_RETRY_CASCADE_FILES,
+            scale_factor=1.05,
+            min_neighbors=3,
+            min_size=retry_min,
+        )
 
 
 class UnavailableFaceDetector:
@@ -118,14 +177,77 @@ class UnavailableFaceDetector:
 
 
 def default_face_detector() -> FaceDetector:
-    """Prefer Haar; fall back to a detector that always returns None."""
+    """Prefer YuNet when weights exist; else Haar; else fail closed."""
     try:
         import cv2
     except ImportError:
         return UnavailableFaceDetector()
-    if not hasattr(cv2, "CascadeClassifier"):
-        return UnavailableFaceDetector()
-    return OpenCvHaarFaceDetector()
+    yunet_ready = hasattr(cv2, "FaceDetectorYN_create") and _yunet_weights_present()
+    if yunet_ready:
+        return OpenCvYunetFaceDetector()
+    if hasattr(cv2, "CascadeClassifier"):
+        return OpenCvHaarFaceDetector()
+    return UnavailableFaceDetector()
+
+
+def _yunet_weights_present() -> bool:
+    """True when the YuNet ONNX file is on disk and is not a Git LFS pointer."""
+    if not _YUNET_MODEL_PATH.is_file():
+        return False
+    return _YUNET_MODEL_PATH.stat().st_size > 10_000
+
+
+def _yunet_detect(bgr_image) -> list[FaceBox]:
+    """Run FaceDetectorYN on a BGR ndarray; return (x, y, w, h) boxes."""
+    import cv2
+
+    height, width = bgr_image.shape[:2]
+    if width < 8 or height < 8:
+        return []
+    detector = cv2.FaceDetectorYN_create(
+        str(_YUNET_MODEL_PATH),
+        "",
+        (width, height),
+        0.6,
+        0.3,
+        5000,
+    )
+    _faces_ok, faces = detector.detect(bgr_image)
+    if faces is None or len(faces) == 0:
+        return []
+    boxes: list[FaceBox] = []
+    for row in faces:
+        left, top, box_w, box_h = (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
+        if box_w >= 8 and box_h >= 8:
+            boxes.append((left, top, box_w, box_h))
+    return boxes
+
+
+def _haar_detect_on_gray(
+    gray,
+    *,
+    cascade_names: tuple[str, ...],
+    scale_factor: float,
+    min_neighbors: int,
+    min_size: int,
+) -> list[FaceBox]:
+    """Run named Haar cascades on a single-channel image."""
+    import cv2
+
+    found_boxes: list[FaceBox] = []
+    side = max(8, int(min_size))
+    for name in cascade_names:
+        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + name)
+        if cascade.empty():
+            continue
+        found = cascade.detectMultiScale(
+            gray,
+            scaleFactor=scale_factor,
+            minNeighbors=min_neighbors,
+            minSize=(side, side),
+        )
+        found_boxes.extend((int(x), int(y), int(w), int(h)) for x, y, w, h in found)
+    return found_boxes
 
 
 def preprocess_person_still(

@@ -5,7 +5,11 @@ from io import BytesIO
 import pytest
 from PIL import Image, ImageDraw
 
-from app.tryon.person_preprocess import preprocess_person_still
+from app.tryon.person_preprocess import (
+    UnavailableFaceDetector,
+    default_face_detector,
+    preprocess_person_still,
+)
 
 
 class FakeFaceDetector:
@@ -91,6 +95,40 @@ def test_preprocess_face_too_small_raises() -> None:
     still = _still_with_face(240, 360, face_box)
     with pytest.raises(ValueError, match="small"):
         preprocess_person_still(still, detector=FakeFaceDetector(face_box))
+
+
+def test_preprocess_accepts_full_body_scale_face() -> None:
+    """Full-length stills have a small face vs frame; ~6% of min-side must still pass."""
+    face_box = (110, 24, 16, 20)
+    still = _still_with_face(240, 360, face_box)
+    png, meta = preprocess_person_still(still, detector=FakeFaceDetector(face_box))
+    assert meta.face_box is not None
+    with Image.open(BytesIO(png)) as out:
+        assert out.height > out.width
+
+
+def test_default_face_detector_is_operational() -> None:
+    """OpenCV must expose a working detector (YuNet and/or Haar), not a no-op."""
+    detector = default_face_detector()
+    assert not isinstance(detector, UnavailableFaceDetector)
+
+
+def test_haar_detector_finds_no_face_on_blank_canvas() -> None:
+    from app.tryon.person_preprocess import OpenCvHaarFaceDetector
+
+    blank = Image.new("RGB", (320, 480), (245, 245, 245))
+    assert OpenCvHaarFaceDetector().detect_face(blank) is None
+
+
+def test_default_detector_rejects_blank_still(monkeypatch) -> None:
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "tryon_allow_stub", False)
+    blank = Image.new("RGB", (320, 480), (245, 245, 245))
+    buffer = BytesIO()
+    blank.save(buffer, format="PNG")
+    with pytest.raises(ValueError, match="No face detected"):
+        preprocess_person_still(buffer.getvalue())
 
 
 def test_preprocess_rejects_second_large_face() -> None:
