@@ -54,6 +54,7 @@ class CatalogStore:
             length_yards=payload.length_yards,
             pallu_shoulder=payload.pallu_shoulder,
             drape_style=payload.drape_style,
+            garment_category=payload.garment_category,
             price_minor=payload.price_minor,
             stock_count=payload.stock_count,
             keep_customer_blouse=payload.keep_customer_blouse,

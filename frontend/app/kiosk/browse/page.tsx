@@ -13,6 +13,7 @@ import {
   type SkuRecord,
 } from "@/lib/api";
 import { dataUrlToJpegBlob } from "@/lib/captureFrame";
+import { filenameFromUrl, isSariSku } from "@/lib/comparePayload";
 import { clearKioskSession, readKioskSession } from "@/lib/kioskSession";
 
 const kioskToken = process.env.NEXT_PUBLIC_KIOSK_DEVICE_TOKEN ?? "";
@@ -50,9 +51,18 @@ export default function KioskBrowsePage() {
       let job = created;
       for (let attempt = 0; attempt < 180; attempt += 1) {
         if (job.status === "succeeded" && job.result_url) {
+          const reconstructedName = filenameFromUrl(sku.reconstructed_asset_url);
           sessionStorage.setItem(
             "smartmirror.compare",
-            JSON.stringify({ skuId: sku.id, skuName: sku.name, resultUrl: job.result_url }),
+            JSON.stringify({
+              skuId: sku.id,
+              skuName: sku.name,
+              resultUrl: job.result_url,
+              productImageUrl: reconstructedName ? kioskMediaUrl(sku.id, reconstructedName) : "",
+              drapeStyle: sku.drape_style,
+              garmentCategory:
+                sku.garment_category ?? (sku.drape_style === "nivi" ? "saree" : undefined),
+            }),
           );
           router.push("/kiosk/compare");
           return;
@@ -71,18 +81,16 @@ export default function KioskBrowsePage() {
     }
   }
 
-  function filenameFromUrl(url: string | null): string | null {
-    if (!url) {
-      return null;
-    }
-    return url.split("/").pop() ?? null;
-  }
+  const skuIsSari = sku
+    ? isSariSku({ garmentCategory: sku.garment_category, drapeStyle: sku.drape_style })
+    : false;
+  const reconstructedFilename = sku ? filenameFromUrl(sku.reconstructed_asset_url) : null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-4xl">Swipe saris</h1>
+          <h1 className="font-display text-4xl">Swipe the collection</h1>
           <p className="text-sm text-zinc-400">Generated stills show how it would look.</p>
         </div>
         <button
@@ -111,13 +119,15 @@ export default function KioskBrowsePage() {
         </div>
       ) : null}
       {skus.length === 0 && !error ? (
-        <p className="text-zinc-400">No approved saris yet. Staff must capture, reconstruct, and approve.</p>
+        <p className="text-zinc-400">
+          No approved garments yet. Staff must capture, reconstruct, and approve.
+        </p>
       ) : null}
       {sku ? (
         <div className="flex items-center gap-4">
           <button
             type="button"
-            aria-label="Previous sari"
+            aria-label={skuIsSari ? "Previous sari" : "Previous garment"}
             onClick={() => setIndex((current) => Math.max(0, current - 1))}
             className="rounded-full border border-white/15 p-3"
           >
@@ -131,10 +141,10 @@ export default function KioskBrowsePage() {
               exit={{ opacity: 0, x: -40 }}
               className="flex-1 overflow-hidden rounded-3xl border border-white/10 bg-zinc-900"
             >
-              {filenameFromUrl(sku.reconstructed_asset_url) ? (
+              {reconstructedFilename ? (
                 <MediaImage
-                  url={kioskMediaUrl(sku.id, filenameFromUrl(sku.reconstructed_asset_url) as string)}
-                  alt={`Canonical reconstructed sari for ${sku.name}`}
+                  url={kioskMediaUrl(sku.id, reconstructedFilename)}
+                  alt={`Canonical reconstructed ${skuIsSari ? "sari" : "garment"} for ${sku.name}`}
                   kioskToken={kioskToken}
                   className="h-[520px] w-full object-cover"
                 />
@@ -143,14 +153,16 @@ export default function KioskBrowsePage() {
                 <p className="text-xs uppercase tracking-widest text-amber-200/80">{sku.barcode}</p>
                 <h2 className="font-display text-3xl">{sku.name}</h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  {sku.fabric ?? "Fabric unset"} · Nivi drape · garment photo sent to try-on
+                  {sku.fabric ?? "Fabric unset"}
+                  {sku.drape_style === "nivi" ? " · Nivi drape" : ""}
+                  {" · garment photo sent to try-on"}
                 </p>
               </div>
             </motion.div>
           </AnimatePresence>
           <button
             type="button"
-            aria-label="Next sari"
+            aria-label={skuIsSari ? "Next sari" : "Next garment"}
             onClick={() => setIndex((current) => Math.min(skus.length - 1, current + 1))}
             className="rounded-full border border-white/15 p-3"
           >

@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from PIL import Image
 from smartmirror_shared.part_types import REQUIRED_PART_TYPES
+from smartmirror_shared.schemas import SkuRecord
 
 from app.main import app
 from app.settings import settings
@@ -42,6 +43,37 @@ def test_create_sku_and_list(tmp_path: Path) -> None:
     assert listed.status_code == 200
     assert listed.json()[0]["id"] == sku_id
     assert listed.json()[0]["approved_for_kiosk"] is False
+    assert listed.json()[0].get("garment_category") in (None, "other")
+
+
+def test_create_sku_persists_garment_category(tmp_path: Path) -> None:
+    client = _client(tmp_path)
+    created = client.post(
+        "/skus",
+        json={"barcode": "SM-TOPS", "name": "Plaid Shirt", "garment_category": "tops"},
+    )
+    assert created.status_code == 200
+    assert created.json()["garment_category"] == "tops"
+
+
+def test_sku_record_json_without_garment_category_validates() -> None:
+    record = SkuRecord.model_validate(
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "barcode": "LEGACY",
+            "name": "Legacy Nivi",
+            "fabric": None,
+            "length_yards": 6.0,
+            "pallu_shoulder": "left",
+            "drape_style": "nivi",
+            "price_minor": None,
+            "stock_count": 0,
+            "keep_customer_blouse": False,
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    assert record.garment_category is None
 
 
 def test_parts_reconstruct_and_approve(tmp_path: Path) -> None:

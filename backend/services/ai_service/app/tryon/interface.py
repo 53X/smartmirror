@@ -17,6 +17,8 @@ class TryOnRequest:
     sku_id: str
     session_id: str
     face_box: tuple[int, int, int, int] | None = None
+    clothing_description: str = ""
+    garment_category: str = "other"  # Catalog/try-on category; FASHN maps saree → one-pieces.
 
 
 @dataclass(frozen=True)

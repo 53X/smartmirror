@@ -14,10 +14,17 @@ describe("WhatsApp share helpers", () => {
     expect(normalizeWhatsAppPhone("09876543210")).toBe("919876543210");
   });
 
-  it("builds a click-to-chat URL with the look caption", () => {
-    const url = whatsAppClickToChatUrl("9876543210", shareLookCaption("Bandhani"));
+  it("builds a click-to-chat URL with the garment-agnostic look caption", () => {
+    const caption = shareLookCaption("Bandhani");
+    expect(caption.toLowerCase()).not.toContain("sari");
+    expect(caption).toContain("garment");
+    const url = whatsAppClickToChatUrl("9876543210", caption);
     expect(url).toContain("https://wa.me/919876543210?text=");
     expect(url).toContain("Bandhani");
+  });
+
+  it("may mention sari in the caption when isSari is set", () => {
+    expect(shareLookCaption("Banarasi", { isSari: true }).toLowerCase()).toContain("sari");
   });
 
   it("opens a numberless chat when the phone is empty", () => {

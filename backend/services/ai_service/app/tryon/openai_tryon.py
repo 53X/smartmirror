@@ -1,4 +1,4 @@
-"""OpenAI Images edit — replace clothing with the sari, keep the same person."""
+"""OpenAI Images edit — dress the person in the described garment, keep identity."""
 
 from __future__ import annotations
 
@@ -10,23 +10,11 @@ from PIL import Image
 from smartmirror_shared.logging_config import configure_service_logging, safe_event
 
 from app.settings import settings
+from app.tryon.garment_prompt import compose_tryon_prompt
 from app.tryon.identity_mask import build_identity_lock_mask
 from app.tryon.interface import TryOnRequest, TryOnResult, TryOnVendor
 
 logger = configure_service_logging("ai_service", settings.log_level)
-
-DRAPE_PROMPT = (
-    "This is a virtual try-on. Image 1 is the person. Image 2 is the sari garment. "
-    "REPLACE every garment the person is currently wearing with the sari from image 2. "
-    "The subject must change: she cannot stay in her original clothes, jeans, dress, or top. "
-    "Drape that exact sari in a traditional Nivi drape — pallu over the left shoulder, "
-    "stacked waist pleats, blouse from the sari set if visible. "
-    "Freeze pose, limbs, body proportions, camera angle, and background. "
-    "Do not rotate, reframe, or restage the person. Change garments only. "
-    "Keep the SAME person: face, skin tone, hair, pose, body proportions, camera angle, background. "
-    "Preserve the sari's exact pallu motif, border, colour, and weave. "
-    "Photoreal fashion photograph. No text, no watermark, no collage, no floating fabric overlay."
-)
 
 
 class OpenAITryOnVendor(TryOnVendor):
@@ -37,7 +25,7 @@ class OpenAITryOnVendor(TryOnVendor):
         return "openai_gpt_image"
 
     def generate(self, request: TryOnRequest) -> TryOnResult:
-        """Call Images edits with person, sari, and an identity-lock mask."""
+        """Call Images edits with person, garment, and an identity-lock mask."""
         if not settings.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is not set")
         if request.face_box is None:
@@ -51,16 +39,20 @@ class OpenAITryOnVendor(TryOnVendor):
                 face_box,
             )
             width, height = customer_image.width, customer_image.height
+        prompt = compose_tryon_prompt(
+            clothing_description=request.clothing_description or "the garment from the product image",
+            garment_category=request.garment_category or "other",
+        )
         data = {
             "model": settings.openai_tryon_model,
-            "prompt": DRAPE_PROMPT,
+            "prompt": prompt,
             "size": "1024x1536",
             "quality": "high",
             "input_fidelity": "high",
         }
         files_with_mask = [
             ("image[]", ("customer.png", customer, "image/png")),
-            ("image[]", ("sari.png", garment, "image/png")),
+            ("image[]", ("garment.png", garment, "image/png")),
             ("mask", ("mask.png", mask_png, "image/png")),
         ]
         response = _post_edits(data, files_with_mask)
@@ -80,7 +72,7 @@ class OpenAITryOnVendor(TryOnVendor):
             retry_mask = build_identity_lock_mask(width, height, face_box, blur=False)
             files_retry = [
                 ("image[]", ("customer.png", customer, "image/png")),
-                ("image[]", ("sari.png", garment, "image/png")),
+                ("image[]", ("garment.png", garment, "image/png")),
                 ("mask", ("mask.png", retry_mask, "image/png")),
             ]
             response = _post_edits(data, files_retry)

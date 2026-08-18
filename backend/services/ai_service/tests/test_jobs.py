@@ -100,3 +100,52 @@ def test_tryon_job_create_with_stub(tmp_path: Path, monkeypatch) -> None:
     polled = _wait_job(client, job_id)
     assert polled.json()["status"] == "succeeded"
     assert polled.json()["vendor"] == "stub"
+
+
+def test_tryon_job_passes_garment_description_to_vendor(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "tryon_allow_stub", True)
+    monkeypatch.setattr(settings, "fal_key", "")
+    monkeypatch.setattr(settings, "openai_api_key", "")
+    client = _client(tmp_path)
+    sari_png = _png((120, 20, 60))
+    still_png = _png((210, 180, 160))
+    captured: dict = {}
+
+    def fake_fetch(_url: str) -> bytes:
+        return sari_png
+
+    def fake_describe(_garment_bytes: bytes) -> str:
+        return "a red plaid flannel shirt"
+
+    class _RecordingVendor:
+        @property
+        def name(self) -> str:
+            return "stub"
+
+        def generate(self, request):
+            captured["request"] = request
+            from app.tryon.interface import TryOnResult
+
+            return TryOnResult(image_png=_png((8, 8, 8)), vendor_name="stub")
+
+    monkeypatch.setattr(jobs_module, "_fetch_bytes", fake_fetch)
+    monkeypatch.setattr(jobs_module, "describe_garment", fake_describe)
+    monkeypatch.setattr(jobs_module, "get_tryon_vendor", lambda: _RecordingVendor())
+
+    created = client.post(
+        "/jobs/try-on",
+        data={
+            "sku_id": str(uuid4()),
+            "session_id": "kiosk-session-test",
+            "reconstructed_asset_url": "http://catalog.local/media/demo/reconstructed.png",
+            "garment_category": "tops",
+            "drape_style": "nivi",
+        },
+        files={"customer_still": ("still.png", still_png, "image/png")},
+    )
+    assert created.status_code == 200
+    polled = _wait_job(client, created.json()["id"])
+    assert polled.json()["status"] == "succeeded"
+    request = captured["request"]
+    assert request.clothing_description == "a red plaid flannel shirt"
+    assert request.garment_category == "tops"

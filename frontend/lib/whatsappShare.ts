@@ -25,17 +25,25 @@ export function whatsAppClickToChatUrl(phone: string, text: string): string {
   return `https://wa.me/${normalized}?text=${encoded}`;
 }
 
-export function shareLookCaption(skuName: string): string {
-  return `How ${skuName} would look. The physical sari is the source of truth for fabric and fall.`;
+/**
+ * WhatsApp caption for a generated look. Mentions sari only when isSari is true.
+ */
+export function shareLookCaption(skuName: string, options?: { isSari?: boolean }): string {
+  if (options?.isSari) {
+    return `How ${skuName} would look. The physical sari is the source of truth.`;
+  }
+  return `How ${skuName} would look. The physical garment is the source of truth.`;
 }
 
 export async function shareOrOpenWhatsApp(options: {
   imageBlob: Blob;
   skuName: string;
   phone: string;
+  isSari?: boolean;
 }): Promise<"shared" | "opened"> {
-  const caption = shareLookCaption(options.skuName);
-  const file = new File([options.imageBlob], "sari-look.png", {
+  const caption = shareLookCaption(options.skuName, { isSari: options.isSari });
+  const filename = options.isSari ? "sari-look.png" : "look.png";
+  const file = new File([options.imageBlob], filename, {
     type: options.imageBlob.type || "image/png",
   });
   const canShareFiles =
@@ -50,7 +58,7 @@ export async function shareOrOpenWhatsApp(options: {
   const objectUrl = URL.createObjectURL(options.imageBlob);
   const anchor = document.createElement("a");
   anchor.href = objectUrl;
-  anchor.download = "sari-look.png";
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(objectUrl);
   window.open(whatsAppClickToChatUrl(options.phone, caption), "_blank", "noopener,noreferrer");

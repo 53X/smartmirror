@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, HttpUrl
 JobKind = Literal["reconstruct", "try_on"]
 JobStatus = Literal["queued", "running", "succeeded", "failed"]
 DrapeStyle = Literal["nivi"]
+GarmentCategory = Literal["tops", "bottoms", "one-pieces", "saree", "other"]
 
 
 class SkuCreateRequest(BaseModel):
@@ -21,6 +22,7 @@ class SkuCreateRequest(BaseModel):
     length_yards: float | None = Field(default=None, ge=4, le=12)
     pallu_shoulder: str = Field(default="left", max_length=32)
     drape_style: DrapeStyle = "nivi"
+    garment_category: GarmentCategory | None = None
     price_minor: int | None = Field(default=None, ge=0)
     stock_count: int = Field(default=0, ge=0)
     keep_customer_blouse: bool = False
@@ -44,6 +46,7 @@ class SkuRecord(BaseModel):
     length_yards: float | None
     pallu_shoulder: str
     drape_style: DrapeStyle
+    garment_category: GarmentCategory | None = None
     price_minor: int | None
     stock_count: int
     keep_customer_blouse: bool

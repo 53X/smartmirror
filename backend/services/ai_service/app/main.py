@@ -72,6 +72,8 @@ async def create_tryon_job(
     session_id: str = Form(...),
     reconstructed_asset_url: str = Form(...),
     customer_still: UploadFile = File(...),
+    garment_category: str | None = Form(default=None),
+    drape_style: str | None = Form(default=None),
 ) -> JobRecord:
     """Queue Stage B try-on. Customer still is held in memory for the job only."""
     if len(session_id) < 8:
@@ -88,6 +90,8 @@ async def create_tryon_job(
         session_id,
         reconstructed_asset_url,
         still_bytes,
+        garment_category,
+        drape_style,
     )
     return record
 

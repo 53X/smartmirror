@@ -48,18 +48,25 @@ async def kiosk_try_on(
     session_id: str = Form(...),
     reconstructed_asset_url: str = Form(...),
     customer_still: UploadFile = File(...),
+    garment_category: str | None = Form(default=None),
+    drape_style: str | None = Form(default=None),
     _role: str = Depends(require_kiosk),
 ) -> Response:
     """Queue Stage B without logging the customer still."""
     filename, payload, content_type = await read_upload(customer_still)
+    data: dict[str, str] = {
+        "sku_id": str(sku_id),
+        "session_id": session_id,
+        "reconstructed_asset_url": reconstructed_asset_url,
+    }
+    if garment_category:
+        data["garment_category"] = garment_category
+    if drape_style:
+        data["drape_style"] = drape_style
     return await proxy_multipart(
         settings.ai_service_base_url,
         "/jobs/try-on",
-        data={
-            "sku_id": str(sku_id),
-            "session_id": session_id,
-            "reconstructed_asset_url": reconstructed_asset_url,
-        },
+        data=data,
         files=[("customer_still", (filename, payload, content_type))],
     )
 

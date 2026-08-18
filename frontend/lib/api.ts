@@ -16,6 +16,7 @@ export interface SkuRecord {
   length_yards: number | null;
   pallu_shoulder: string;
   drape_style: string;
+  garment_category?: string | null;
   price_minor: number | null;
   stock_count: number;
   keep_customer_blouse: boolean;
@@ -69,13 +70,18 @@ export async function createTryOnJob(
   stillBlob: Blob,
 ): Promise<JobRecord> {
   if (!sku.reconstructed_asset_url) {
-    throw new Error("This sari has no reconstructed asset yet");
+    throw new Error("This garment has no product image yet");
   }
   const body = new FormData();
   body.set("sku_id", sku.id);
   body.set("session_id", sessionId);
   body.set("reconstructed_asset_url", sku.reconstructed_asset_url);
   body.set("customer_still", stillBlob, "customer.jpg");
+  body.set("drape_style", sku.drape_style);
+  const category = sku.garment_category ?? (sku.drape_style === "nivi" ? "saree" : undefined);
+  if (category) {
+    body.set("garment_category", category);
+  }
   const response = await fetch(`${gatewayUrl()}/kiosk/try-on`, {
     method: "POST",
     headers: kioskHeaders(),

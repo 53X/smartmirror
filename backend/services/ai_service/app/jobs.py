@@ -15,6 +15,8 @@ from smartmirror_shared.schemas import JobRecord
 from app.reconstruct import reconstruct_from_part_bytes
 from app.settings import settings
 from app.tryon.factory import get_tryon_vendor
+from app.tryon.garment_describe import describe_garment
+from app.tryon.garment_prompt import resolve_garment_category
 from app.tryon.interface import TryOnRequest
 from app.tryon.person_preprocess import preprocess_person_still
 
@@ -119,8 +121,10 @@ def run_tryon_job(
     session_id: str,
     reconstructed_asset_url: str,
     customer_still: bytes,
+    garment_category: str | None = None,
+    drape_style: str | None = None,
 ) -> None:
-    """Run Stage B: preprocess the customer still, then stub or hosted vendor. Still bytes are not logged."""
+    """Run Stage B: describe garment, resolve category, then vendor compose. Still bytes are not logged."""
     try:
         sari_bytes = _fetch_bytes(reconstructed_asset_url)
         try:
@@ -151,7 +155,25 @@ def run_tryon_job(
                 }
             ),
         )
+        description = describe_garment(sari_bytes)
+        category = resolve_garment_category(
+            sku_category=garment_category,
+            drape_style=drape_style,
+            description=description,
+        )
         vendor = get_tryon_vendor()
+        logger.info(
+            "tryon_garment_resolved %s",
+            safe_event(
+                {
+                    "job_id": str(job_id),
+                    "session_id": session_id,
+                    "description_length": len(description),
+                    "garment_category": category,
+                    "vendor": vendor.name,
+                }
+            ),
+        )
         result = vendor.generate(
             TryOnRequest(
                 customer_still=prepared_still,
@@ -159,6 +181,8 @@ def run_tryon_job(
                 sku_id=str(sku_id),
                 session_id=session_id,
                 face_box=meta.face_box,
+                clothing_description=description,
+                garment_category=category,
             )
         )
         jobs.complete(job_id, result.image_png)

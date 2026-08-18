@@ -9,6 +9,7 @@ import httpx
 from PIL import Image
 
 from app.settings import settings
+from app.tryon.garment_prompt import map_fashn_category
 from app.tryon.interface import TryOnRequest, TryOnResult, TryOnVendor
 
 FASHN_ENDPOINT = "https://fal.run/fal-ai/fashn/tryon/v1.6"
@@ -34,7 +35,7 @@ class FalFashnVendor(TryOnVendor):
         payload = {
             "model_image": _data_uri(request.customer_still),
             "garment_image": _data_uri(request.reconstructed_sari),
-            "category": "one-pieces",
+            "category": map_fashn_category(request.garment_category),
             "mode": "quality",
             "garment_photo_type": "flat-lay",
             "output_format": "png",

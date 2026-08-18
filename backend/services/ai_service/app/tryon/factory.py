@@ -1,4 +1,9 @@
-"""Choose FASHN, OpenAI image-edit, optional stub, or fail closed."""
+"""Choose FASHN, OpenAI image-edit, optional stub, or fail closed.
+
+Vendor interface stays swappable. Future dedicated VTO (not in this pass):
+Vertex ``recontext_image`` as in fmind/virtual-try-on — add a vendor module
+here when GCP credentials exist. Do not couple the kiosk to one host forever.
+"""
 
 from app.settings import settings
 from app.tryon.fal_fashn import FalFashnVendor
