@@ -1,10 +1,28 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageCircle } from "lucide-react";
+import { motion } from "motion/react";
+import { ImageOff, MessageCircle } from "lucide-react";
+import { KioskShell } from "@/components/KioskShell";
 import { MediaImage } from "@/components/MediaImage";
+import { MotionButton } from "@/components/MotionButton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { fetchKioskResultBlob, kioskResultUrl } from "@/lib/api";
 import {
   compareCopy,
@@ -12,10 +30,45 @@ import {
   parseComparePayload,
   type ComparePayload,
 } from "@/lib/comparePayload";
+import { kioskImageTransition } from "@/lib/kioskMotion";
 import { readKioskSession } from "@/lib/kioskSession";
 import { shareOrOpenWhatsApp } from "@/lib/whatsappShare";
 
 const kioskToken = process.env.NEXT_PUBLIC_KIOSK_DEVICE_TOKEN ?? "";
+
+const triptychContainer = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.08 },
+  },
+};
+
+const triptychPanel = {
+  hidden: { opacity: 0, y: 10 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: kioskImageTransition,
+  },
+};
+
+/**
+ * One lookbook panel in the compare triptych.
+ */
+function ComparePanel({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <motion.div variants={triptychPanel} className="min-w-0 flex-1">
+      <Card className="overflow-hidden py-0">
+        <CardContent className="p-0">
+          <div className="relative aspect-[3/4] overflow-hidden bg-background">{children}</div>
+        </CardContent>
+        <CardFooter className="justify-center">
+          <Badge variant="secondary">{label}</Badge>
+        </CardFooter>
+      </Card>
+    </motion.div>
+  );
+}
 
 /**
  * Read compare payload and session still once on the client.
@@ -94,101 +147,111 @@ export default function KioskComparePage() {
 
   const copy = compareCopy(payload);
   const generatedUrl = kioskResultUrl(payload.resultUrl);
+  const shareFailed = shareMessage !== null && /could not/i.test(shareMessage);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-8 px-8 py-10 lg:px-12">
-      <header className="flex flex-col gap-3 border-b border-white/10 pb-6">
-        <p className="text-[11px] uppercase tracking-[0.35em] text-amber-200/80">Fitting room</p>
-        <h1 className="font-display text-5xl font-normal tracking-tight text-zinc-50 lg:text-6xl">
-          {copy.title}
-        </h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">{copy.subtitle}</p>
-      </header>
-
-      <section
+    <KioskShell
+      className="max-w-[1600px]"
+      place="Your look"
+      title={copy.title}
+      subtitle={copy.subtitle}
+    >
+      <motion.section
         aria-label="Compare your photo, the product, and the generated look"
-        className="grid grid-cols-1 gap-0 border-y border-white/10 lg:grid-cols-3"
+        className="flex flex-col gap-6 lg:flex-row"
+        variants={triptychContainer}
+        initial="hidden"
+        animate="show"
       >
-        <figure className="flex flex-col border-white/10 lg:border-r">
-          <div className="relative aspect-[3/4] overflow-hidden bg-zinc-950">
-            {/* Session still is a data URL; next/image cannot optimize it. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={still} alt="Your captured photo" className="h-full w-full object-cover" />
-          </div>
-          <figcaption className="border-t border-white/10 px-1 py-3 text-[11px] uppercase tracking-[0.28em] text-zinc-500">
-            {copy.photoLabel}
-          </figcaption>
-        </figure>
+        <ComparePanel label={copy.photoLabel}>
+          {/* Session still is a data URL; next/image cannot optimize it. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <motion.img
+            src={still}
+            alt="Your captured photo"
+            className="h-full w-full object-cover"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={kioskImageTransition}
+          />
+        </ComparePanel>
 
-        <figure className="flex flex-col border-white/10 lg:border-r">
-          <div className="relative aspect-[3/4] overflow-hidden bg-zinc-950">
-            {payload.productImageUrl ? (
-              <MediaImage
-                url={payload.productImageUrl}
-                alt={`Product for ${payload.skuName}`}
-                kioskToken={kioskToken}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="grid h-full place-items-center px-6 text-center text-sm text-zinc-500">
-                {copy.productPlaceholder}
-              </div>
-            )}
-          </div>
-          <figcaption className="border-t border-white/10 px-1 py-3 text-[11px] uppercase tracking-[0.28em] text-zinc-500">
-            {copy.productLabel}
-          </figcaption>
-        </figure>
-
-        <figure className="flex flex-col">
-          <div className="relative aspect-[3/4] overflow-hidden bg-zinc-950">
+        <ComparePanel label={copy.productLabel}>
+          {payload.productImageUrl ? (
             <MediaImage
-              url={generatedUrl}
-              alt={`Generated look for ${payload.skuName}`}
+              url={payload.productImageUrl}
+              alt={`Product for ${payload.skuName}`}
               kioskToken={kioskToken}
               className="h-full w-full object-cover"
             />
-          </div>
-          <figcaption className="border-t border-white/10 px-1 py-3 text-[11px] uppercase tracking-[0.28em] text-zinc-500">
-            {copy.generatedLabel}
-          </figcaption>
-        </figure>
-      </section>
+          ) : (
+            <Empty className="h-full justify-center border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ImageOff />
+                </EmptyMedia>
+                <EmptyTitle>Product photo unavailable</EmptyTitle>
+                <EmptyDescription>{copy.productPlaceholder}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </ComparePanel>
 
-      <form
-        onSubmit={(event) => void sendToWhatsApp(event)}
-        className="flex flex-col gap-4 border border-white/10 px-5 py-5 sm:flex-row sm:items-end"
-      >
-        <label className="flex min-w-0 flex-1 flex-col gap-2 text-[11px] uppercase tracking-[0.22em] text-zinc-400">
-          WhatsApp number
-          <input
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="98765 43210"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            className="rounded-none border-0 border-b border-white/20 bg-transparent px-0 py-3 text-base tracking-normal text-zinc-50 outline-none placeholder:text-zinc-600 focus:border-amber-200/70"
+        <ComparePanel label={copy.generatedLabel}>
+          <MediaImage
+            url={generatedUrl}
+            alt={`Generated look for ${payload.skuName}`}
+            kioskToken={kioskToken}
+            className="h-full w-full object-cover"
           />
-        </label>
-        <button
-          type="submit"
-          disabled={shareBusy}
-          className="inline-flex items-center justify-center gap-2 border border-amber-200/80 bg-amber-200 px-6 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-40"
-        >
-          <MessageCircle size={16} />
-          {shareBusy ? "Preparing…" : "Send look on WhatsApp"}
-        </button>
-      </form>
-      {shareMessage ? <p className="text-sm text-zinc-400">{shareMessage}</p> : null}
-      <div>
-        <Link
-          href="/kiosk/browse"
-          className="inline-flex border border-white/20 px-5 py-3 text-sm text-zinc-200"
-        >
-          {copy.tryAnother}
-        </Link>
-      </div>
-    </main>
+        </ComparePanel>
+      </motion.section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Share this look</CardTitle>
+          <CardDescription>Send the generated still to WhatsApp. Optional.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={(event) => void sendToWhatsApp(event)}>
+            <FieldGroup className="sm:flex-row sm:items-end">
+              <Field>
+                <FieldLabel htmlFor="whatsapp-phone">WhatsApp number</FieldLabel>
+                <Input
+                  id="whatsapp-phone"
+                  name="whatsapp"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="98765 43210…"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="h-14 min-h-14 text-base md:text-base"
+                />
+              </Field>
+              <MotionButton type="submit" disabled={shareBusy}>
+                {shareBusy ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <MessageCircle data-icon="inline-start" />
+                )}
+                {shareBusy ? "Preparing…" : "Send look on WhatsApp"}
+              </MotionButton>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+
+      {shareMessage ? (
+        <Alert variant={shareFailed ? "destructive" : "default"}>
+          <AlertTitle>{shareFailed ? "Share failed" : "WhatsApp"}</AlertTitle>
+          <AlertDescription>{shareMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Button asChild variant="outline" size="kiosk">
+        <Link href="/kiosk/browse">{copy.tryAnother}</Link>
+      </Button>
+    </KioskShell>
   );
 }
