@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Outfit } from "next/font/google";
+import { MotionRoot } from "@/components/MotionRoot";
+import { cn } from "@/lib/utils";
 import "./globals.css";
 
 const display = Cormorant_Garamond({
@@ -21,8 +23,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} h-full antialiased`}>
-      <body className="min-h-full bg-zinc-950 text-zinc-50">{children}</body>
+    <html lang="en" className={cn("dark h-full antialiased", display.variable, sans.variable)}>
+      <body className="min-h-full bg-background text-foreground">
+        <MotionRoot>{children}</MotionRoot>
+      </body>
     </html>
   );
 }

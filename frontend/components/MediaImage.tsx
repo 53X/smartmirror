@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
+import { ImageOff } from "lucide-react";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { kioskImageTransition } from "@/lib/kioskMotion";
+import { cn } from "@/lib/utils";
 
 interface MediaImageProps {
   url: string;
@@ -56,13 +62,28 @@ export function MediaImage({ url, alt, authHeader, kioskToken, className }: Medi
 
   if (error) {
     return (
-      <div className={`grid place-items-center bg-zinc-900 text-sm text-zinc-400 ${className ?? ""}`}>
-        {error}
-      </div>
+      <Empty className={cn("h-full justify-center border-0", className)}>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <ImageOff />
+          </EmptyMedia>
+          <EmptyTitle>Photo unavailable</EmptyTitle>
+          <EmptyDescription>{error}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
   if (!objectUrl) {
-    return <div className={`animate-pulse bg-zinc-900 ${className ?? ""}`} aria-hidden />;
+    return <Skeleton className={cn("rounded-none", className)} aria-hidden />;
   }
-  return <img src={objectUrl} alt={alt} className={className} />;
+  return (
+    <motion.img
+      src={objectUrl}
+      alt={alt}
+      className={className}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={kioskImageTransition}
+    />
+  );
 }

@@ -3,8 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Shirt } from "lucide-react";
+import { KioskShell } from "@/components/KioskShell";
 import { MediaImage } from "@/components/MediaImage";
+import { MotionButton } from "@/components/MotionButton";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
   createTryOnJob,
   kioskMediaUrl,
@@ -14,6 +23,7 @@ import {
 } from "@/lib/api";
 import { dataUrlToJpegBlob } from "@/lib/captureFrame";
 import { filenameFromUrl, isSariSku } from "@/lib/comparePayload";
+import { kioskSlideTransition } from "@/lib/kioskMotion";
 import { clearKioskSession, readKioskSession } from "@/lib/kioskSession";
 
 const kioskToken = process.env.NEXT_PUBLIC_KIOSK_DEVICE_TOKEN ?? "";
@@ -24,6 +34,7 @@ export default function KioskBrowsePage() {
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const session = readKioskSession();
@@ -33,7 +44,8 @@ export default function KioskBrowsePage() {
     }
     void listKioskSkus()
       .then(setSkus)
-      .catch((loadError: Error) => setError(loadError.message));
+      .catch((loadError: Error) => setError(loadError.message))
+      .finally(() => setLoading(false));
   }, [router]);
 
   const sku = skus[index];
@@ -85,99 +97,144 @@ export default function KioskBrowsePage() {
     ? isSariSku({ garmentCategory: sku.garment_category, drapeStyle: sku.drape_style })
     : false;
   const reconstructedFilename = sku ? filenameFromUrl(sku.reconstructed_asset_url) : null;
+  const showRecapture = error ? /recapture|face|person/i.test(error) : false;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-4xl">Swipe the collection</h1>
-          <p className="text-sm text-zinc-400">Generated stills show how it would look.</p>
-        </div>
-        <button
+    <KioskShell
+      className="max-w-5xl"
+      place="The collection"
+      title="Swipe the collection"
+      subtitle="Each generated still shows how the piece would look on you. The physical garment stays the source of truth."
+      actions={
+        <Button
           type="button"
-          className="text-sm text-zinc-400 underline"
+          variant="link"
           onClick={() => {
             clearKioskSession();
             router.push("/kiosk/consent");
           }}
         >
           End session
-        </button>
-      </div>
+        </Button>
+      }
+    >
       {error ? (
-        <div className="space-y-2">
-          <p className="text-sm text-red-300">{error}</p>
-          {/recapture|face|person/i.test(error) ? (
-            <button
-              type="button"
-              className="text-sm text-amber-200 underline"
-              onClick={() => router.push("/kiosk/capture")}
-            >
-              Recapture photo
-            </button>
+        <Alert variant="destructive">
+          <AlertTitle>Could not generate the look</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+          {showRecapture ? (
+            <AlertAction>
+              <Button type="button" variant="link" onClick={() => router.push("/kiosk/capture")}>
+                Recapture photo
+              </Button>
+            </AlertAction>
           ) : null}
+        </Alert>
+      ) : null}
+
+      {loading ? (
+        <div className="flex items-center gap-5">
+          <Skeleton className="size-14 shrink-0 rounded-lg" aria-hidden />
+          <Card className="min-w-0 flex-1 overflow-hidden py-0">
+            <Skeleton className="aspect-[3/4] max-h-[min(68vh,760px)] w-full rounded-none" aria-hidden />
+            <CardHeader className="gap-2 py-5">
+              <Skeleton className="h-5 w-24" aria-hidden />
+              <Skeleton className="h-9 w-56" aria-hidden />
+              <Skeleton className="h-5 w-72" aria-hidden />
+            </CardHeader>
+          </Card>
+          <Skeleton className="size-14 shrink-0 rounded-lg" aria-hidden />
         </div>
       ) : null}
-      {skus.length === 0 && !error ? (
-        <p className="text-zinc-400">
-          No approved garments yet. Staff must capture, reconstruct, and approve.
-        </p>
+
+      {!loading && skus.length === 0 && !error ? (
+        <Empty className="border border-dashed py-16">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Shirt />
+            </EmptyMedia>
+            <EmptyTitle>No approved garments yet</EmptyTitle>
+            <EmptyDescription>
+              Staff must capture, reconstruct, and approve before shoppers can browse.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : null}
+
       {sku ? (
-        <div className="flex items-center gap-4">
-          <button
+        <div className="flex items-center gap-5">
+          <MotionButton
             type="button"
+            variant="outline"
+            size="icon-kiosk"
             aria-label={skuIsSari ? "Previous sari" : "Previous garment"}
+            disabled={busy}
             onClick={() => setIndex((current) => Math.max(0, current - 1))}
-            className="rounded-full border border-white/15 p-3"
           >
             <ChevronLeft />
-          </button>
+          </MotionButton>
           <AnimatePresence mode="wait">
             <motion.div
               key={sku.id}
-              initial={{ opacity: 0, x: 40 }}
+              initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              className="flex-1 overflow-hidden rounded-3xl border border-white/10 bg-zinc-900"
+              exit={{ opacity: 0, x: -16 }}
+              transition={kioskSlideTransition}
+              aria-busy={busy}
+              className="min-w-0 flex-1"
             >
-              {reconstructedFilename ? (
-                <MediaImage
-                  url={kioskMediaUrl(sku.id, reconstructedFilename)}
-                  alt={`Canonical reconstructed ${skuIsSari ? "sari" : "garment"} for ${sku.name}`}
-                  kioskToken={kioskToken}
-                  className="h-[520px] w-full object-cover"
-                />
-              ) : null}
-              <div className="p-5">
-                <p className="text-xs uppercase tracking-widest text-amber-200/80">{sku.barcode}</p>
-                <h2 className="font-display text-3xl">{sku.name}</h2>
-                <p className="mt-1 text-sm text-zinc-400">
-                  {sku.fabric ?? "Fabric unset"}
-                  {sku.drape_style === "nivi" ? " · Nivi drape" : ""}
-                  {" · garment photo sent to try-on"}
-                </p>
-              </div>
+              <Card className="overflow-hidden py-0">
+                {reconstructedFilename ? (
+                  <CardContent className="relative p-0">
+                    <MediaImage
+                      url={kioskMediaUrl(sku.id, reconstructedFilename)}
+                      alt={`Canonical reconstructed ${skuIsSari ? "sari" : "garment"} for ${sku.name}`}
+                      kioskToken={kioskToken}
+                      className="aspect-[3/4] max-h-[min(68vh,760px)] w-full object-cover"
+                    />
+                    {busy ? (
+                      <Skeleton
+                        className="absolute inset-0 rounded-none opacity-40"
+                        aria-hidden
+                      />
+                    ) : null}
+                  </CardContent>
+                ) : null}
+                <CardHeader className="py-5">
+                  <Badge variant="secondary">{sku.barcode}</Badge>
+                  <CardTitle>{sku.name}</CardTitle>
+                  <CardDescription>
+                    {sku.fabric ?? "Fabric unset"}
+                    {sku.drape_style === "nivi" ? " · Nivi drape" : ""}
+                    {" · garment photo sent to try-on"}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
             </motion.div>
           </AnimatePresence>
-          <button
+          <MotionButton
             type="button"
+            variant="outline"
+            size="icon-kiosk"
             aria-label={skuIsSari ? "Next sari" : "Next garment"}
+            disabled={busy}
             onClick={() => setIndex((current) => Math.min(skus.length - 1, current + 1))}
-            className="rounded-full border border-white/15 p-3"
           >
             <ChevronRight />
-          </button>
+          </MotionButton>
         </div>
       ) : null}
-      <button
+
+      <MotionButton
         type="button"
+        className="w-full"
         disabled={!sku || busy}
+        aria-live="polite"
         onClick={() => void generateLook()}
-        className="rounded-full bg-amber-200 px-6 py-3 text-sm font-semibold text-zinc-950 disabled:opacity-40"
       >
+        {busy ? <Spinner data-icon="inline-start" /> : null}
         {busy ? "Generating look… this can take a minute" : "See how it would look"}
-      </button>
-    </main>
+      </MotionButton>
+    </KioskShell>
   );
 }
