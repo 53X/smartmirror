@@ -3,15 +3,15 @@
  */
 
 export const CAPTURE_RULES: readonly string[] = [
-  "One person only, looking toward the camera",
-  "Face fully visible — no hands, phone, hair, or scarf over the face",
-  "Even light on the face; avoid strong backlight and deep shadow",
-  "Leave space around the head; do not crop the chin or hairline",
-  "Stand far enough to show shoulders and torso, not just a selfie crop",
+  "One person, looking toward the camera",
+  "Face clear — no hands, phone, or scarf covering it",
+  "Soft, even light on the face; avoid strong backlight",
+  "Leave space around the head; don’t crop the chin or hairline",
+  "Show shoulders and torso — not just a tight selfie crop",
 ];
 
 export const CAPTURE_HEADLINE =
-  "Front-facing, face clear, one person. A rejected still cannot generate a look.";
+  "A clear front-facing still is all we need. If the face is hidden, the look can’t be styled.";
 
 export const CAMERA_INSTRUCTION =
   "Fit your head in the oval and keep shoulders in frame. Hands and phones off the face.";

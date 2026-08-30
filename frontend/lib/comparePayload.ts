@@ -89,12 +89,12 @@ export function compareCopy(payload: ComparePayload): CompareCopy {
   return {
     title: payload.skuName,
     subtitle: sari
-      ? `Your photo, the sari, and the generated look. Ask staff to unfold the real sari before you buy.`
-      : `Your photo, the product, and the generated look. The physical garment is the source of truth.`,
-    photoLabel: "Your photo",
-    productLabel: "Product",
-    generatedLabel: "Generated look",
-    tryAnother: "Try another look",
+      ? `Your still, the sari, and how it would look on you. Ask staff to unfold the real piece before you decide.`
+      : `Your still, the piece, and how it would look on you. The garment in hand stays the source of truth.`,
+    photoLabel: "You",
+    productLabel: "The piece",
+    generatedLabel: "On you",
+    tryAnother: "Browse another look",
     productPlaceholder: sari ? "Sari image unavailable" : "Product image unavailable",
   };
 }

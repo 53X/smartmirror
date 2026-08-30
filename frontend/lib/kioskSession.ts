@@ -4,6 +4,7 @@
  */
 
 export const KIOSK_SESSION_KEY = "smartmirror.kiosk.v1";
+export const KIOSK_COMPARE_KEY = "smartmirror.compare";
 
 export interface KioskSession {
   sessionId: string;
@@ -15,6 +16,15 @@ export interface KioskSession {
 function timeoutMs(): number {
   const minutes = Number(process.env.NEXT_PUBLIC_SESSION_TIMEOUT_MINUTES ?? "10");
   return Math.max(1, minutes) * 60 * 1000;
+}
+
+/**
+ * Inactivity window before the kiosk returns to the attract screen.
+ * Defaults to 90s — short enough for floor demos, overridable via env.
+ */
+export function idleTimeoutMs(): number {
+  const seconds = Number(process.env.NEXT_PUBLIC_KIOSK_IDLE_SECONDS ?? "90");
+  return Math.max(30, seconds) * 1000;
 }
 
 export function createSessionId(): string {
@@ -47,6 +57,7 @@ export function writeKioskSession(session: KioskSession): void {
 
 export function clearKioskSession(): void {
   sessionStorage.removeItem(KIOSK_SESSION_KEY);
+  sessionStorage.removeItem(KIOSK_COMPARE_KEY);
 }
 
 export function sessionTimeoutMinutes(): number {
