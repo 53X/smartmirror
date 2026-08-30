@@ -30,21 +30,22 @@ import {
   parseComparePayload,
   type ComparePayload,
 } from "@/lib/comparePayload";
-import { kioskImageTransition } from "@/lib/kioskMotion";
-import { readKioskSession } from "@/lib/kioskSession";
+import { kioskCompareStaggerSeconds, kioskImageTransition } from "@/lib/kioskMotion";
+import { KIOSK_COMPARE_KEY, readKioskSession } from "@/lib/kioskSession";
 import { shareOrOpenWhatsApp } from "@/lib/whatsappShare";
+import { cn } from "@/lib/utils";
 
 const kioskToken = process.env.NEXT_PUBLIC_KIOSK_DEVICE_TOKEN ?? "";
 
 const triptychContainer = {
   hidden: {},
   show: {
-    transition: { staggerChildren: 0.08 },
+    transition: { staggerChildren: kioskCompareStaggerSeconds },
   },
 };
 
 const triptychPanel = {
-  hidden: { opacity: 0, y: 10 },
+  hidden: { opacity: 0, y: 12 },
   show: {
     opacity: 1,
     y: 0,
@@ -52,18 +53,45 @@ const triptychPanel = {
   },
 };
 
+const spotlightPanel = {
+  hidden: { opacity: 0, y: 18, scale: 0.96 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1.03,
+    transition: { ...kioskImageTransition, duration: 0.48 },
+  },
+};
+
 /**
  * One lookbook panel in the compare triptych.
  */
-function ComparePanel({ label, children }: { label: string; children: ReactNode }) {
+function ComparePanel({
+  label,
+  children,
+  spotlight = false,
+}: {
+  label: string;
+  children: ReactNode;
+  spotlight?: boolean;
+}) {
   return (
-    <motion.div variants={triptychPanel} className="min-w-0 flex-1">
-      <Card className="overflow-hidden py-0">
-        <CardContent className="p-0">
+    <motion.div
+      variants={spotlight ? spotlightPanel : triptychPanel}
+      className={cn("min-w-0 flex-1", spotlight && "relative z-10 lg:flex-[1.15]")}
+    >
+      <Card
+        className={cn(
+          "overflow-hidden py-0",
+          spotlight && "ring-2 ring-primary/70 shadow-[0_0_0_1px_oklch(0.905_0.118_98_/_0.25)]",
+        )}
+      >
+        <CardContent className="relative p-0">
+          <div className="kiosk-frame-spotlight absolute inset-0 opacity-60" aria-hidden />
           <div className="relative aspect-[3/4] overflow-hidden bg-background">{children}</div>
         </CardContent>
-        <CardFooter className="justify-center">
-          <Badge variant="secondary">{label}</Badge>
+        <CardFooter className="justify-center gap-2">
+          <Badge variant={spotlight ? "default" : "secondary"}>{label}</Badge>
         </CardFooter>
       </Card>
     </motion.div>
@@ -76,16 +104,16 @@ function ComparePanel({ label, children }: { label: string; children: ReactNode 
 function readCompareBootstrap(): {
   payload: ComparePayload | null;
   still: string | null;
-  redirect: "/kiosk/consent" | "/kiosk/browse" | null;
+  redirect: "/kiosk/attract" | "/kiosk/browse" | null;
 } {
   if (typeof window === "undefined") {
     return { payload: null, still: null, redirect: null };
   }
   const session = readKioskSession();
   if (!session?.stillDataUrl) {
-    return { payload: null, still: null, redirect: "/kiosk/consent" };
+    return { payload: null, still: null, redirect: "/kiosk/attract" };
   }
-  const raw = sessionStorage.getItem("smartmirror.compare");
+  const raw = sessionStorage.getItem(KIOSK_COMPARE_KEY);
   if (!raw) {
     return { payload: null, still: session.stillDataUrl, redirect: "/kiosk/browse" };
   }
@@ -96,6 +124,9 @@ function readCompareBootstrap(): {
   return { payload: parsed, still: session.stillDataUrl, redirect: null };
 }
 
+/**
+ * Compare your still, the product, and the generated look — generated is spotlighted.
+ */
 export default function KioskComparePage() {
   const router = useRouter();
   const [boot] = useState(readCompareBootstrap);
@@ -131,11 +162,11 @@ export default function KioskComparePage() {
       });
       setShareMessage(
         outcome === "shared"
-          ? "Pick WhatsApp in the share sheet to send this look."
+          ? "Pick WhatsApp in the share sheet to send this look to your phone."
           : "Look saved on this device. Attach that image in the WhatsApp chat that opened.",
       );
     } catch (shareError) {
-      setShareMessage(shareError instanceof Error ? shareError.message : "Could not send to WhatsApp");
+      setShareMessage(shareError instanceof Error ? shareError.message : "Could not send to your phone");
     } finally {
       setShareBusy(false);
     }
@@ -158,20 +189,18 @@ export default function KioskComparePage() {
     >
       <motion.section
         aria-label="Compare your photo, the product, and the generated look"
-        className="flex flex-col gap-6 lg:flex-row"
+        className="flex flex-col items-stretch gap-6 lg:flex-row lg:items-end"
         variants={triptychContainer}
         initial="hidden"
         animate="show"
       >
         <ComparePanel label={copy.photoLabel}>
-          {/* Session still is a data URL; next/image cannot optimize it. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <motion.img
             src={still}
             alt="Your captured photo"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover opacity-90"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: 0.9 }}
             transition={kioskImageTransition}
           />
         </ComparePanel>
@@ -182,7 +211,7 @@ export default function KioskComparePage() {
               url={payload.productImageUrl}
               alt={`Product for ${payload.skuName}`}
               kioskToken={kioskToken}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover opacity-90"
             />
           ) : (
             <Empty className="h-full justify-center border-0">
@@ -197,7 +226,7 @@ export default function KioskComparePage() {
           )}
         </ComparePanel>
 
-        <ComparePanel label={copy.generatedLabel}>
+        <ComparePanel label={copy.generatedLabel} spotlight>
           <MediaImage
             url={generatedUrl}
             alt={`Generated look for ${payload.skuName}`}
@@ -209,14 +238,14 @@ export default function KioskComparePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Share this look</CardTitle>
-          <CardDescription>Send the generated still to WhatsApp. Optional.</CardDescription>
+          <CardTitle>Send to my phone</CardTitle>
+          <CardDescription>Optional — we'll open WhatsApp with this look.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={(event) => void sendToWhatsApp(event)}>
             <FieldGroup className="sm:flex-row sm:items-end">
               <Field>
-                <FieldLabel htmlFor="whatsapp-phone">WhatsApp number</FieldLabel>
+                <FieldLabel htmlFor="whatsapp-phone">Mobile number</FieldLabel>
                 <Input
                   id="whatsapp-phone"
                   name="whatsapp"
@@ -235,7 +264,7 @@ export default function KioskComparePage() {
                 ) : (
                   <MessageCircle data-icon="inline-start" />
                 )}
-                {shareBusy ? "Preparing…" : "Send look on WhatsApp"}
+                {shareBusy ? "Preparing…" : "Send to my phone"}
               </MotionButton>
             </FieldGroup>
           </form>
@@ -244,7 +273,7 @@ export default function KioskComparePage() {
 
       {shareMessage ? (
         <Alert variant={shareFailed ? "destructive" : "default"}>
-          <AlertTitle>{shareFailed ? "Share failed" : "WhatsApp"}</AlertTitle>
+          <AlertTitle>{shareFailed ? "Couldn't send" : "On its way"}</AlertTitle>
           <AlertDescription>{shareMessage}</AlertDescription>
         </Alert>
       ) : null}
