@@ -48,13 +48,13 @@ export default function ConsentPage() {
     <KioskShell
       align="center"
       className="max-w-3xl"
-      place="Consent"
-      title="Before we take a photo"
+      place="Welcome"
+      title="Step into the fitting room"
       subtitle={
         <>
-          This kiosk uses <strong className="text-foreground">one front-facing still</strong> to
-          show how a sari would look. Take it with the camera, upload a photo, or use the demo model.
-          It is not a live overlay — the physical sari is the source of truth for fabric and fall.
+          We'll take <strong className="text-foreground">one front-facing still</strong> so you can
+          see how a piece would look on you — camera, upload, or our demo model. The garment in hand
+          is still the real thing for fabric and fall.
         </>
       }
     >
@@ -65,19 +65,20 @@ export default function ConsentPage() {
       >
         <Card>
           <CardHeader>
-            <Badge variant="secondary">Session only</Badge>
-            <CardTitle>How we handle your photo</CardTitle>
+            <Badge variant="secondary">This visit only</Badge>
+            <CardTitle>A quick word about your photo</CardTitle>
             <CardDescription>
-              The still lives in this kiosk session only. Face images are not written to server logs.
+              Your still stays on this mirror for the visit. Face images are not written to server
+              logs.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-8">
             <ul className="flex flex-col gap-3 text-base text-muted-foreground">
-              <li>We do not keep your face by default.</li>
+              <li>We don't keep your face by default.</li>
               <li>
-                The session clears after {timeoutMinutes} minutes of inactivity, or when you finish.
+                The visit clears after {timeoutMinutes} minutes of stillness, or when you finish.
               </li>
-              <li>Sharing a look on WhatsApp is optional and happens only if you choose it.</li>
+              <li>Sending a look to your phone is optional — only if you ask.</li>
             </ul>
             <Separator />
             <FieldSet>
@@ -91,8 +92,8 @@ export default function ConsentPage() {
                     onCheckedChange={(value) => setPhotoOk(value === true)}
                   />
                   <FieldLabel htmlFor="consent-photo" className="text-base font-normal leading-relaxed">
-                    I agree to use a front-facing photo (camera, upload, or demo model) for this try-on
-                    session.
+                    I'm fine using a front-facing photo (camera, upload, or demo model) for this
+                    try-on.
                   </FieldLabel>
                 </Field>
                 <Field orientation="horizontal" className="items-start">
@@ -103,8 +104,7 @@ export default function ConsentPage() {
                     onCheckedChange={(value) => setNoKeep(value === true)}
                   />
                   <FieldLabel htmlFor="consent-storage" className="text-base font-normal leading-relaxed">
-                    I understand the photo is not stored after this session unless I choose to share a
-                    look.
+                    I understand the photo isn't kept after this visit unless I choose to send a look.
                   </FieldLabel>
                 </Field>
               </FieldGroup>
@@ -117,11 +117,17 @@ export default function ConsentPage() {
               disabled={!ready}
               onClick={continueToCapture}
             >
-              Continue
+              Begin
             </MotionButton>
           </CardFooter>
         </Card>
       </motion.div>
+      <p className="text-center text-sm text-muted-foreground">
+        Staff?{" "}
+        <a href="/staff/login" className="text-primary underline-offset-4 hover:underline">
+          Sign in
+        </a>
+      </p>
     </KioskShell>
   );
 }
