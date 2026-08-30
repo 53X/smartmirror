@@ -44,14 +44,14 @@ const sourceFade = {
 
 export default function KioskCapturePage() {
   const router = useRouter();
-  const [source, setSource] = useState<Source>("upload");
+  const [source, setSource] = useState<Source>("demo");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   function commitStill(dataUrl: string): void {
     const session = readKioskSession();
     if (!session) {
-      router.replace("/kiosk/consent");
+      router.replace("/kiosk/attract");
       return;
     }
     writeKioskSession({
@@ -78,7 +78,7 @@ export default function KioskCapturePage() {
     }
   }
 
-  async function useDemoModel(): Promise<void> {
+  async function applyDemoModelStill(): Promise<void> {
     setBusy(true);
     setError(null);
     try {
@@ -100,8 +100,8 @@ export default function KioskCapturePage() {
     <KioskShell
       align="center"
       className="max-w-2xl"
-      place="Capture"
-      title="Choose the person"
+      place="Your still"
+      title="Who are we dressing?"
       subtitle={CAPTURE_HEADLINE}
     >
       <CaptureGuidance />
@@ -136,7 +136,7 @@ export default function KioskCapturePage() {
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>Photo could not be used</AlertTitle>
+          <AlertTitle>We couldn't use that photo</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
@@ -150,10 +150,10 @@ export default function KioskCapturePage() {
                   {busy ? <Spinner /> : <ImageUp />}
                 </EmptyMedia>
                 <EmptyTitle>
-                  {busy ? "Reading photo…" : "Upload a front-facing photo"}
+                  {busy ? "Opening your photo…" : "Add a front-facing photo"}
                 </EmptyTitle>
                 <EmptyDescription>
-                  Tap to choose a file. Face clear, one person, nothing covering the face.
+                  Tap to choose a file — face clear, one person, nothing covering the face.
                 </EmptyDescription>
               </EmptyHeader>
               <input
@@ -172,12 +172,10 @@ export default function KioskCapturePage() {
               <CardHeader className="py-5">
                 <CardTitle>Demo model</CardTitle>
                 <CardDescription>
-                  Use this still if you prefer not to use your own photo.
+                  Prefer a private try-on? Use our model instead of your own photo.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                {/* Demo asset is a static public file; next/image is unnecessary here. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <motion.img
                   src={DEMO_MODEL_SRC}
                   alt="Demo model for sari try-on"
@@ -192,10 +190,10 @@ export default function KioskCapturePage() {
                   type="button"
                   className="w-full"
                   disabled={busy}
-                  onClick={() => void useDemoModel()}
+                  onClick={() => void applyDemoModelStill()}
                 >
                   {busy ? <Spinner data-icon="inline-start" /> : null}
-                  {busy ? "Loading…" : "Use this demo model"}
+                  {busy ? "Loading…" : "Dress this model"}
                 </MotionButton>
               </CardFooter>
             </Card>
@@ -206,7 +204,7 @@ export default function KioskCapturePage() {
           <motion.div key="camera" {...sourceFade}>
             <WebcamCapture
               instruction={CAMERA_INSTRUCTION}
-              buttonLabel="Capture still"
+              buttonLabel="Take my photo"
               onCapture={commitStill}
             />
           </motion.div>
