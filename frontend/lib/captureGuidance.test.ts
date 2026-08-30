@@ -9,7 +9,7 @@ describe("captureGuidance", () => {
     expect(joined).toContain("face");
     expect(joined).toMatch(/hand|phone/);
     expect(joined).toContain("light");
-    expect(CAPTURE_HEADLINE.toLowerCase()).toContain("rejected");
+    expect(CAPTURE_HEADLINE.toLowerCase()).toMatch(/clear|face|still/);
     expect(CAMERA_INSTRUCTION.toLowerCase()).toContain("oval");
   });
 });

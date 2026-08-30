@@ -9,8 +9,8 @@ export function CaptureGuidance(): ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Before you capture</CardTitle>
-        <CardDescription>A rejected still cannot generate a look.</CardDescription>
+        <CardTitle>For the best look</CardTitle>
+        <CardDescription>A clear face makes the styling sing.</CardDescription>
       </CardHeader>
       <CardContent>
         <ul className="flex flex-col gap-3 text-base text-muted-foreground">
